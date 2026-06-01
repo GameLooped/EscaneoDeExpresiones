@@ -4,40 +4,29 @@ import { ExpressionEditor } from './components/ExpressionEditor';
 import { TreeCanvas } from './components/TreeCanvas';
 import { parseExpression } from './logic/Parser';
 import type { TreeNode } from './logic/Parser';
-import { Camera } from 'lucide-react';
+import { Camera, Download, X } from 'lucide-react';
 import './index.css';
 
 type AppState = 'scan' | 'edit' | 'canvas';
+
+const APK_URL = import.meta.env.BASE_URL + 'MathTree-OCR.apk';
+
+function isMobileDevice(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 
 function App() {
   const [appState, setAppState] = useState<AppState>('scan');
   const [scannedText, setScannedText] = useState<string>('');
   const [rootNode, setRootNode] = useState<TreeNode | null>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
+    // Show the download banner on mobile devices
+    if (isMobileDevice()) {
+      setShowBanner(true);
     }
-  };
+  }, []);
 
   const handleScan = (text: string) => {
     if (text) {
@@ -59,17 +48,38 @@ function App() {
   };
 
   return (
-    <div className="app-container" style={{ width: '100%', height: '100vh', position: 'relative' }}>
+    <div className="app-container" style={{ width: '100%', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       
+      {/* APK Download Banner for mobile */}
+      {showBanner && (
+        <div style={styles.banner}>
+          <div style={styles.bannerContent}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={styles.bannerIcon}>📱</div>
+              <div>
+                <p style={styles.bannerTitle}>¡Descarga la app nativa!</p>
+                <p style={styles.bannerSubtitle}>Instala MathTree OCR en tu Android</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={styles.bannerButton}>
+                <Download size={16} /> Descargar APK
+              </a>
+              <button onClick={() => setShowBanner(false)} style={styles.bannerClose}>
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>MathTree OCR</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {deferredPrompt && (
-            <button className="btn btn-primary" onClick={handleInstallClick} style={{ padding: '8px 16px', backgroundColor: 'var(--success)' }}>
-              📥 Descargar App
-            </button>
-          )}
+          <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.85rem', textDecoration: 'none', backgroundColor: 'var(--success)' }}>
+            <Download size={14} /> APK
+          </a>
           {appState === 'canvas' && (
             <button className="btn btn-secondary" onClick={() => setAppState('scan')} style={{ padding: '8px 16px' }}>
               <Camera size={16} /> Nuevo
@@ -103,6 +113,50 @@ function App() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  banner: {
+    background: 'linear-gradient(135deg, #10b981, #059669)',
+    padding: '12px 16px',
+    zIndex: 100,
+    animation: 'fadeIn 0.4s ease forwards',
+  },
+  bannerContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '10px',
+    maxWidth: '600px',
+    margin: '0 auto',
+  },
+  bannerIcon: {
+    fontSize: '1.8rem',
+  },
+  bannerTitle: {
+    margin: 0,
+    fontWeight: 700,
+    fontSize: '0.95rem',
+    color: 'white',
+  },
+  bannerSubtitle: {
+    margin: 0,
+    fontSize: '0.75rem',
+    color: 'rgba(255,255,255,0.85)',
+  },
+  bannerButton: {
+    padding: '8px 16px',
+    fontSize: '0.85rem',
+    textDecoration: 'none',
+    backgroundColor: 'white',
+    color: '#059669',
+    boxShadow: 'none',
+  },
+  bannerClose: {
+    background: 'none',
+    border: 'none',
+    color: 'rgba(255,255,255,0.7)',
+    cursor: 'pointer',
+    padding: '4px',
+  },
   header: {
     height: '60px',
     display: 'flex',
@@ -126,7 +180,8 @@ const styles: Record<string, React.CSSProperties> = {
   main: {
     flex: 1,
     height: 'calc(100vh - 60px)',
-    position: 'relative'
+    position: 'relative',
+    overflow: 'hidden',
   },
   editBg: {
     width: '100%',
@@ -139,3 +194,4 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export default App;
+
