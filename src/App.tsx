@@ -48,7 +48,7 @@ function App() {
   };
 
   return (
-    <div className="app-container" style={{ width: '100%', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div className="app-container" style={{ width: '100%', minHeight: '100dvh', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       
       {/* APK Download Banner for mobile */}
       {showBanner && (
@@ -158,16 +158,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px',
   },
   header: {
-    height: '60px',
+    minHeight: '60px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 20px',
+    padding: '10px 20px',
     background: 'rgba(15, 23, 42, 0.8)',
     backdropFilter: 'blur(10px)',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
     zIndex: 50,
-    position: 'relative'
+    position: 'relative',
+    flexWrap: 'wrap',
+    gap: '10px'
   },
   headerTitle: {
     fontSize: '1.25rem',
@@ -179,13 +181,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   main: {
     flex: 1,
-    height: 'calc(100vh - 60px)',
+    display: 'flex',
+    flexDirection: 'column',
     position: 'relative',
     overflow: 'hidden',
   },
   editBg: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

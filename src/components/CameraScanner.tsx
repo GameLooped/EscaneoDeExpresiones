@@ -119,6 +119,7 @@ const styles: Record<string, React.CSSProperties> = {
   videoWrapper: {
     width: '100%',
     maxWidth: '500px',
+    maxHeight: '60vh',
     aspectRatio: '3/4',
     overflow: 'hidden',
     position: 'relative',
@@ -126,6 +127,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#000',
+    borderRadius: '16px',
   },
   video: {
     width: '100%',
