@@ -2,20 +2,28 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { TreeNode } from '../logic/Parser';
 import { Evaluator } from '../logic/Evaluator';
 import type { EvalStep } from '../logic/Evaluator';
-import { Play, RotateCcw, StepForward } from 'lucide-react';
+import { Play, RotateCcw, StepForward, Pause } from 'lucide-react';
 
 interface TreeCanvasProps {
   rootNode: TreeNode;
 }
 
+// Calculate the depth of the tree for spacing
+function treeDepth(node: TreeNode | undefined): number {
+  if (!node) return 0;
+  return 1 + Math.max(treeDepth(node.left), treeDepth(node.right));
+}
+
 export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const [steps, setSteps] = useState<EvalStep[]>([]);
-  const [currentStep, setCurrentStep] = useState(-1); // -1 means initial tree
+  const [snapshots, setSnapshots] = useState<TreeNode[]>([]);
+  const [currentStep, setCurrentStep] = useState(-1); // -1 = initial tree
   const [isPlaying, setIsPlaying] = useState(false);
-  
+  const [finalResult, setFinalResult] = useState<number | null>(null);
+
   // Viewport state for pan & zoom
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -25,12 +33,17 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
   // Initialize evaluator
   useEffect(() => {
     const evaluator = new Evaluator();
-    const { steps } = evaluator.evaluate(rootNode);
+    const { result, steps, snapshots } = evaluator.evaluate(rootNode);
     setSteps(steps);
+    setSnapshots(snapshots);
+    setFinalResult(result);
     setCurrentStep(-1);
-    
-    // Auto-center on load
+
+    // Auto-center based on tree depth
     if (containerRef.current) {
+      const depth = treeDepth(rootNode);
+      const autoScale = depth > 4 ? 0.7 : 1;
+      setScale(autoScale);
       setOffset({ x: containerRef.current.clientWidth / 2, y: 60 });
     }
   }, [rootNode]);
@@ -50,79 +63,126 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
     ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, rect.width, rect.height);
-    
+
     // Apply transformations
     ctx.save();
     ctx.translate(offset.x, offset.y);
     ctx.scale(scale, scale);
 
-    const activeTree = currentStep === -1 ? rootNode : steps[currentStep].tree;
-    const highlightedNodeId = currentStep !== -1 ? steps[currentStep].evaluatedNodeId : null;
+    // Determine which tree snapshot to show
+    // snapshots[0] = original tree, snapshots[1] = after step 0 resolved, etc.
+    const activeTree = currentStep === -1 ? snapshots[0] : snapshots[currentStep];
+    const activeStep = currentStep >= 0 && currentStep < steps.length ? steps[currentStep] : null;
 
-    // Layout calculation (simple recursive width division)
-    const NODE_RADIUS = 25;
-    const LEVEL_HEIGHT = 80;
+    // Set of node IDs that are "flashing" (just got evaluated)
+    const flashingIds = new Set<string>();
+    if (activeStep) {
+      flashingIds.add(activeStep.nodeId);
+    }
 
-    const calcLayout = (node: TreeNode, x: number, y: number, horizontalSpacing: number) => {
-      // First draw lines to children
+    const NODE_RADIUS = 28;
+    const LEVEL_HEIGHT = 90;
+
+    const drawNode = (node: TreeNode, x: number, y: number, horizontalSpacing: number) => {
+      // Draw lines to children FIRST (behind nodes)
       if (node.left) {
         const childX = x - horizontalSpacing;
         const childY = y + LEVEL_HEIGHT;
+        
+        // Line gradient
+        const grad = ctx.createLinearGradient(x, y + NODE_RADIUS, childX, childY - NODE_RADIUS);
+        grad.addColorStop(0, 'rgba(139, 92, 246, 0.5)');
+        grad.addColorStop(1, 'rgba(236, 72, 153, 0.3)');
+        
         ctx.beginPath();
         ctx.moveTo(x, y + NODE_RADIUS);
         ctx.lineTo(childX, childY - NODE_RADIUS);
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
-        calcLayout(node.left, childX, childY, horizontalSpacing / 1.8);
+        drawNode(node.left, childX, childY, horizontalSpacing / 1.8);
       }
-      
+
       if (node.right) {
         const childX = x + horizontalSpacing;
         const childY = y + LEVEL_HEIGHT;
+        
+        const grad = ctx.createLinearGradient(x, y + NODE_RADIUS, childX, childY - NODE_RADIUS);
+        grad.addColorStop(0, 'rgba(139, 92, 246, 0.5)');
+        grad.addColorStop(1, 'rgba(236, 72, 153, 0.3)');
+        
         ctx.beginPath();
         ctx.moveTo(x, y + NODE_RADIUS);
         ctx.lineTo(childX, childY - NODE_RADIUS);
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
-        calcLayout(node.right, childX, childY, horizontalSpacing / 1.8);
+        drawNode(node.right, childX, childY, horizontalSpacing / 1.8);
       }
 
-      // Draw node
+      // Determine node colors and state
+      const isFlashing = flashingIds.has(node.id);
+      const wasEvaluated = node.isEvaluated === true;
+
+      // Draw glow behind flashing nodes
+      if (isFlashing) {
+        ctx.save();
+        ctx.shadowColor = '#10b981';
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(x, y, NODE_RADIUS + 4, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Draw node circle
       ctx.beginPath();
       ctx.arc(x, y, NODE_RADIUS, 0, 2 * Math.PI);
-      
-      // Node styling
-      const isHighlighted = node.id === highlightedNodeId || node.isEvaluated;
-      if (node.type === 'number') {
-        ctx.fillStyle = isHighlighted ? '#a78bfa' : '#8b5cf6'; // Purple variations
+
+      if (isFlashing) {
+        // Green glow for the node that just resolved
+        ctx.fillStyle = '#10b981';
+      } else if (wasEvaluated) {
+        // Soft teal for previously resolved nodes
+        ctx.fillStyle = '#06b6d4';
+      } else if (node.type === 'number') {
+        // Purple for number leaves
+        ctx.fillStyle = '#8b5cf6';
       } else {
-        ctx.fillStyle = isHighlighted ? '#f472b6' : '#ec4899'; // Pink variations
+        // Pink for operators
+        ctx.fillStyle = '#ec4899';
       }
-      
+
       ctx.fill();
-      if (isHighlighted) {
-         ctx.shadowColor = ctx.fillStyle;
-         ctx.shadowBlur = 15;
-         ctx.stroke();
-         ctx.shadowBlur = 0;
-      }
-      
-      // Text
+
+      // Subtle border
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Node label text
       ctx.fillStyle = 'white';
-      ctx.font = 'bold 18px Outfit, sans-serif';
+      ctx.font = 'bold 16px Outfit, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(node.value, x, y);
+
+      // Truncate long decimals for display
+      let label = node.value;
+      if (node.type === 'number' && label.length > 6) {
+        label = parseFloat(label).toFixed(2);
+      }
+      ctx.fillText(label, x, y);
     };
 
     if (activeTree) {
-      calcLayout(activeTree, 0, 0, 150);
+      const depth = treeDepth(activeTree);
+      const baseSpacing = Math.max(80, depth * 50);
+      drawNode(activeTree, 0, 0, baseSpacing);
     }
 
     ctx.restore();
-  }, [rootNode, steps, currentStep, scale, offset]);
+  }, [snapshots, steps, currentStep, scale, offset]);
 
   useEffect(() => {
     drawTree();
@@ -134,14 +194,14 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
     if (isPlaying && currentStep < steps.length - 1) {
       timer = setTimeout(() => {
         setCurrentStep(prev => prev + 1);
-      }, 1000);
+      }, 1500); // Slightly slower for visibility
     } else if (isPlaying && currentStep >= steps.length - 1) {
       setIsPlaying(false);
     }
     return () => clearTimeout(timer);
   }, [isPlaying, currentStep, steps.length]);
 
-  // Touch & Mouse handlers for Pan
+  // Pan handlers
   const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     setIsDragging(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -158,11 +218,28 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
 
   const handleMouseUp = () => setIsDragging(false);
 
-  // Wheel handler for Zoom
   const handleWheel = (e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setScale(prev => Math.min(Math.max(0.5, prev + delta), 3));
+    setScale(prev => Math.min(Math.max(0.3, prev + delta), 3));
   };
+
+  // Format the step description
+  const getStepDescription = (): string => {
+    if (currentStep === -1) {
+      return 'Árbol generado — Presiona ▶ Resolver';
+    }
+    if (currentStep >= steps.length) {
+      return `✅ Resultado final: ${finalResult}`;
+    }
+    const step = steps[currentStep];
+    const isLast = currentStep === steps.length - 1;
+    if (isLast) {
+      return `✅ Resultado final: ${formatNum(step.resultValue)}`;
+    }
+    return `${formatNum(step.leftValue)} ${step.operator} ${formatNum(step.rightValue)} = ${formatNum(step.resultValue)}`;
+  };
+
+  const isFinished = currentStep >= steps.length - 1 && currentStep !== -1;
 
   return (
     <div style={styles.container} ref={containerRef}>
@@ -181,39 +258,72 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
 
       <div className="glass-panel animate-fade-in" style={styles.controlsPanel}>
         <div style={styles.resultDisplay}>
-          {currentStep === steps.length - 1 
-            ? `Resultado final: ${steps[steps.length - 1].resultValue}`
-            : currentStep === -1 
-              ? "Árbol generado" 
-              : `Resolviendo... ${steps[currentStep].resultValue}`}
+          {getStepDescription()}
         </div>
-        
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-secondary btn-icon" onClick={() => { setCurrentStep(-1); setIsPlaying(false); }}>
+
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => { setCurrentStep(-1); setIsPlaying(false); }}
+            title="Reiniciar"
+          >
             <RotateCcw size={20} />
           </button>
-          <button 
-            className="btn btn-primary" 
-            onClick={() => setIsPlaying(!isPlaying)}
-            disabled={currentStep >= steps.length - 1}
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              if (isFinished) {
+                // Reset and replay
+                setCurrentStep(-1);
+                setTimeout(() => {
+                  setCurrentStep(0);
+                  setIsPlaying(true);
+                }, 200);
+              } else if (currentStep === -1) {
+                setCurrentStep(0);
+                setIsPlaying(true);
+              } else {
+                setIsPlaying(!isPlaying);
+              }
+            }}
           >
-            <Play size={20} /> {isPlaying ? 'Pausar' : 'Animar'}
+            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+            {isFinished ? 'Repetir' : isPlaying ? 'Pausar' : 'Resolver'}
           </button>
-          <button 
-            className="btn btn-secondary btn-icon" 
-            onClick={() => { if (currentStep < steps.length - 1) setCurrentStep(c => c + 1); setIsPlaying(false); }}
-            disabled={currentStep >= steps.length - 1}
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => {
+              setIsPlaying(false);
+              if (currentStep === -1) {
+                setCurrentStep(0);
+              } else if (currentStep < steps.length - 1) {
+                setCurrentStep(c => c + 1);
+              }
+            }}
+            disabled={isFinished}
+            title="Siguiente paso"
           >
             <StepForward size={20} />
           </button>
         </div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-          Puedes arrastrar y hacer scroll para moverte
+
+        {currentStep >= 0 && !isFinished && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+            Paso {currentStep + 1} de {steps.length}
+          </p>
+        )}
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+          Arrastra para mover · Scroll para zoom
         </p>
       </div>
     </div>
   );
 };
+
+function formatNum(n: number): string {
+  if (Number.isInteger(n)) return n.toString();
+  return parseFloat(n.toFixed(4)).toString();
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -229,20 +339,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   controlsPanel: {
     position: 'absolute',
-    bottom: '40px',
+    bottom: '30px',
     left: '50%',
     transform: 'translateX(-50%)',
     padding: '20px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '12px',
-    width: '90%',
-    maxWidth: '400px'
+    gap: '10px',
+    width: '92%',
+    maxWidth: '420px'
   },
   resultDisplay: {
-    fontSize: '1.25rem',
+    fontSize: '1.2rem',
     fontWeight: 'bold',
-    color: 'white'
+    color: 'white',
+    textAlign: 'center'
   }
 };
