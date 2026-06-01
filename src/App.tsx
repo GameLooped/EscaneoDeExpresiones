@@ -115,9 +115,6 @@ function App() {
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>MathTree OCR</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={() => setShowSettings(true)} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
-            ⚙️ API
-          </button>
           {!Capacitor.isNativePlatform() && (
             <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.85rem', textDecoration: 'none', backgroundColor: 'var(--success)' }}>
               <Download size={14} /> APK
