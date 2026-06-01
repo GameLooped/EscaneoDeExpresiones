@@ -21,6 +21,9 @@ function App() {
   const [scannedText, setScannedText] = useState<string>('');
   const [rootNode, setRootNode] = useState<TreeNode | null>(null);
   const [showBanner, setShowBanner] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [geminiKey, setGeminiKey] = useState<string>(localStorage.getItem('gemini_api_key') || '');
+  const [tempKey, setTempKey] = useState<string>(geminiKey);
 
   useEffect(() => {
     // Show the download banner on mobile devices, but ONLY if we are NOT already in the native app
@@ -28,6 +31,12 @@ function App() {
       setShowBanner(true);
     }
   }, []);
+
+  const saveApiKey = () => {
+    localStorage.setItem('gemini_api_key', tempKey);
+    setGeminiKey(tempKey);
+    setShowSettings(false);
+  };
 
   const handleScan = (text: string) => {
     if (text) {
@@ -51,6 +60,34 @@ function App() {
   return (
     <div className="app-container" style={{ width: '100%', minHeight: '100dvh', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       
+      {/* Settings Modal */}
+      {showSettings && (
+        <div style={styles.modalOverlay}>
+          <div className="glass-panel" style={styles.modalContent}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>⚙️ Ajustes de Inteligencia Artificial</h2>
+              <button onClick={() => setShowSettings(false)} style={styles.bannerClose}><X size={20}/></button>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', marginBottom: '16px' }}>
+              Para leer fórmulas matemáticas escritas a mano a la perfección, esta aplicación puede conectarse al cerebro visual de Google Gemini 1.5 Flash. 
+              <br/><br/>
+              Consigue tu clave API gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{color: '#3b82f6'}}>Google AI Studio</a>.
+            </p>
+            <input 
+              type="password" 
+              placeholder="Pega tu Gemini API Key aquí..."
+              value={tempKey}
+              onChange={(e) => setTempKey(e.target.value)}
+              style={styles.input}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+              <button className="btn btn-secondary" onClick={() => setShowSettings(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={saveApiKey}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* APK Download Banner for mobile */}
       {showBanner && (
         <div style={styles.banner}>
@@ -78,6 +115,9 @@ function App() {
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>MathTree OCR</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowSettings(true)} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
+            ⚙️ API
+          </button>
           {!Capacitor.isNativePlatform() && (
             <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.85rem', textDecoration: 'none', backgroundColor: 'var(--success)' }}>
               <Download size={14} /> APK
@@ -94,7 +134,7 @@ function App() {
       {/* Main Content Area */}
       <main style={styles.main}>
         {appState === 'scan' && (
-          <CameraScanner onScan={handleScan} />
+          <CameraScanner onScan={handleScan} geminiKey={geminiKey} />
         )}
         
         {appState === 'edit' && (
@@ -196,6 +236,34 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.2) 0%, transparent 70%)'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    backdropFilter: 'blur(4px)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px'
+  },
+  modalContent: {
+    padding: '24px',
+    width: '100%',
+    maxWidth: '450px',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: '1px solid var(--glass-border)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    color: 'white',
+    fontSize: '1rem',
+    fontFamily: 'monospace'
   }
 };
 

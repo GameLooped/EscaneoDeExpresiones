@@ -3,12 +3,14 @@ import { Camera, RefreshCw, Upload } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorPluginMlKitTextRecognition } from '@pantrist/capacitor-plugin-ml-kit-text-recognition';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface CameraScannerProps {
   onScan: (text: string) => void;
+  geminiKey?: string;
 }
 
-export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
+export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan, geminiKey }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -36,11 +38,67 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     }
   };
 
-  // Auto-start on mount
   React.useEffect(() => {
     startCamera();
     return () => stopCamera();
   }, []);
+
+  const runGemini = async (base64Data: string): Promise<string> => {
+    if (!geminiKey) throw new Error("No Gemini API Key");
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = "Eres un experto en matemáticas leyendo fórmulas escritas a mano. Extrae la expresión matemática exacta de esta imagen. Tu respuesta DEBE contener ÚNICAMENTE la fórmula matemática final lista para ser evaluada, usando dígitos y los operadores matemáticos básicos (+, -, *, /). NO uses markdown, NO uses espacios, NO devuelvas texto explicativo, solo la pura ecuación.";
+    
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: "image/png"
+        }
+      }
+    ]);
+    return result.response.text().trim();
+  };
+
+  const processImage = async (dataUrl: string) => {
+    const base64Data = dataUrl.split(',')[1];
+
+    if (geminiKey) {
+      try {
+        const text = await runGemini(base64Data);
+        onScan(text);
+        return;
+      } catch (err) {
+        console.error("Gemini failed, falling back to OCR", err);
+      }
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await CapacitorPluginMlKitTextRecognition.detectText({
+          base64Image: base64Data,
+          rotation: 0
+        });
+        onScan(result.text.trim());
+      } catch (err) {
+        console.error("ML Kit Error:", err);
+        alert("Error con el lector ML Kit.");
+      }
+    } else {
+      try {
+        const worker = await Tesseract.createWorker('eng', 1);
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
+        });
+        const result = await worker.recognize(dataUrl);
+        await worker.terminate();
+        onScan(result.data.text.trim());
+      } catch (err) {
+        console.error("OCR Error:", err);
+      }
+    }
+  };
 
   const captureAndScan = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -54,45 +112,12 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Apply heavy contrast and grayscale for better OCR
     ctx.filter = 'grayscale(100%) contrast(300%)';
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     try {
-      const enhancedDataUrl = canvas.toDataURL('image/png');
-
-      if (Capacitor.isNativePlatform()) {
-        // Remove data:image/png;base64, prefix for the plugin
-        const base64Data = enhancedDataUrl.split(',')[1];
-        try {
-          const result = await CapacitorPluginMlKitTextRecognition.detectText({
-            base64Image: base64Data,
-            rotation: 0
-          });
-          const text = result.text.trim();
-          onScan(text);
-        } catch (err) {
-          console.error("ML Kit Error:", err);
-          alert("Error con el lector ML Kit.");
-        }
-      } else {
-        // Web fallback using Tesseract
-        try {
-          const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => console.log(m)
-          });
-          await worker.setParameters({
-            tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
-          });
-          const result = await worker.recognize(enhancedDataUrl);
-          await worker.terminate();
-          
-          const text = result.data.text.trim();
-          onScan(text);
-        } catch (err) {
-          console.error("OCR Error:", err);
-        }
-      }
+      const dataUrl = canvas.toDataURL('image/png');
+      await processImage(dataUrl);
     } finally {
       setIsScanning(false);
     }
@@ -106,13 +131,18 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
-      if (!dataUrl) return;
+      if (!dataUrl) {
+        setIsScanning(false);
+        return;
+      }
 
       const img = new Image();
       img.onload = async () => {
-        if (!canvasRef.current) return;
+        if (!canvasRef.current) {
+          setIsScanning(false);
+          return;
+        }
         const canvas = canvasRef.current;
-        // Scale down if image is too large to prevent out-of-memory errors
         const maxDim = 1200;
         let w = img.width;
         let h = img.height;
@@ -124,49 +154,22 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+          setIsScanning(false);
+          return;
+        }
         
-        // Apply heavy contrast and grayscale for better OCR
         ctx.filter = 'grayscale(100%) contrast(300%)';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        const enhancedDataUrl = canvas.toDataURL('image/png');
-
-        if (Capacitor.isNativePlatform()) {
-          const base64Data = enhancedDataUrl.split(',')[1];
-          try {
-            const result = await CapacitorPluginMlKitTextRecognition.detectText({
-              base64Image: base64Data,
-              rotation: 0
-            });
-            const text = result.text.trim();
-            onScan(text);
-          } catch (err) {
-            console.error("ML Kit Error:", err);
-            alert("Error con el lector ML Kit.");
-          } finally {
-            setIsScanning(false);
-          }
-        } else {
-          try {
-            const worker = await Tesseract.createWorker('eng', 1, {
-              logger: m => console.log(m)
-            });
-            await worker.setParameters({
-              tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
-            });
-            const result = await worker.recognize(enhancedDataUrl);
-            await worker.terminate();
-            
-            const text = result.data.text.trim();
-            onScan(text);
-          } catch (err) {
-            console.error("OCR Error:", err);
-          } finally {
-            setIsScanning(false);
-          }
+        try {
+          const enhancedDataUrl = canvas.toDataURL('image/png');
+          await processImage(enhancedDataUrl);
+        } finally {
+          setIsScanning(false);
         }
       };
+      img.onerror = () => setIsScanning(false);
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);

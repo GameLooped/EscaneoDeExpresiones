@@ -14,42 +14,22 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({ initialText,
   useEffect(() => {
     if (!initialText) return;
     
-    // 1. Extraer la línea que más se parece a una expresión matemática
-    const lines = initialText.split('\n');
-    let bestLine = initialText;
-    let maxScore = -1;
-    
-    for (const line of lines) {
-      // Contar caracteres puramente matemáticos (números y operadores)
-      const mathChars = line.match(/[0-9+\-*/()=÷:xX.,]/g);
-      const mathCount = mathChars ? mathChars.length : 0;
-      
-      // Contar letras (que suelen ser ruido)
-      const letters = line.match(/[a-wy-zA-WY-Z]/g);
-      const letterCount = letters ? letters.length : 0;
-      
-      // Puntuación: +1 por cada caracter matemático, -1 por cada letra
-      const score = mathCount - letterCount;
-      
-      if (score > maxScore && mathCount > 0) {
-        maxScore = score;
-        bestLine = line;
-      }
-    }
+    // Gemini devuelve la fórmula ya formateada casi perfectamente.
+    // Solo aplicamos una limpieza final de seguridad.
+    let cleaned = initialText;
 
-    // 2. Limpiar la línea extraída
-    let cleaned = bestLine.replace(/\s+/g, '');
+    // Quitar saltos de línea, espacios, y comillas o markdown residual que Gemini pueda enviar
+    cleaned = cleaned.replace(/```math/gi, '');
+    cleaned = cleaned.replace(/```/g, '');
+    cleaned = cleaned.replace(/\s+/g, '');
     
-    // 3. Normalizar operaciones básicas (enfoque en suma, resta, mult, div)
-    cleaned = cleaned.replace(/[xX×•·]/g, '*'); // Multiplicación
-    cleaned = cleaned.replace(/[÷:\\]/g, '/'); // División
-    cleaned = cleaned.replace(/,/g, '.');      // Decimales
-    // Nota: Ya no forzamos letras a números (a->4, s->5) porque corrompía las fórmulas reales.
+    // Normalizar lo obvio
+    cleaned = cleaned.replace(/[xX×•·]/g, '*');
+    cleaned = cleaned.replace(/[÷:\\]/g, '/');
+    cleaned = cleaned.replace(/,/g, '.');
     
-    // 4. Filtrar estrictamente solo números, 4 operadores y paréntesis
+    // Filtro final estricto
     cleaned = cleaned.replace(/[^0-9+\-*/().]/g, '');
-    
-    // Evitar que queden operadores sueltos al inicio por error (ej: *5+3)
     cleaned = cleaned.replace(/^[\*/]+/, '');
     
     setText(cleaned);
