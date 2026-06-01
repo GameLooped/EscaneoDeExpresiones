@@ -39,12 +39,20 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
     setFinalResult(result);
     setCurrentStep(-1);
 
-    // Auto-center based on tree depth
+    // Auto-center based on tree depth and screen size
     if (containerRef.current) {
       const depth = treeDepth(rootNode);
-      const autoScale = depth > 4 ? 0.7 : 1;
+      const isMobile = window.innerWidth < 600;
+      
+      let autoScale = 1;
+      if (isMobile) {
+        autoScale = depth > 3 ? 0.45 : 0.6;
+      } else {
+        autoScale = depth > 4 ? 0.7 : 1;
+      }
+      
       setScale(autoScale);
-      setOffset({ x: containerRef.current.clientWidth / 2, y: 60 });
+      setOffset({ x: containerRef.current.clientWidth / 2, y: isMobile ? 40 : 60 });
     }
   }, [rootNode]);
 
@@ -339,19 +347,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   controlsPanel: {
     position: 'absolute',
-    bottom: '30px',
+    bottom: '20px',
     left: '50%',
     transform: 'translateX(-50%)',
-    padding: '20px',
+    padding: '15px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '10px',
-    width: '92%',
-    maxWidth: '420px'
+    gap: '8px',
+    width: '94%',
+    maxWidth: '420px',
+    maxHeight: '30vh',
+    overflowY: 'auto'
   },
   resultDisplay: {
-    fontSize: '1.2rem',
+    fontSize: '1.1rem',
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'center'
