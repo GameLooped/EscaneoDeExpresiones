@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Camera, RefreshCw } from 'lucide-react';
+import { Camera, RefreshCw, Upload } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 
 interface CameraScannerProps {
@@ -77,6 +77,37 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      if (!dataUrl) return;
+
+      try {
+        const worker = await Tesseract.createWorker('eng', 1, {
+          logger: m => console.log(m)
+        });
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
+        });
+        const result = await worker.recognize(dataUrl);
+        await worker.terminate();
+        
+        const text = result.data.text.trim();
+        onScan(text);
+      } catch (err) {
+        console.error("OCR Error:", err);
+      } finally {
+        setIsScanning(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="camera-container" style={styles.container}>
       <div className="glass-panel" style={styles.videoWrapper}>
@@ -95,10 +126,23 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
       </div>
       
       <div style={styles.controls}>
-        <button className="btn btn-primary btn-icon" onClick={captureAndScan} disabled={isScanning} style={{ width: 64, height: 64 }}>
-          <Camera size={32} />
-        </button>
-        <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>Apunta a una fórmula y captura</p>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <button className="btn btn-primary btn-icon" onClick={captureAndScan} disabled={isScanning} style={{ width: 64, height: 64 }} title="Tomar foto">
+            <Camera size={32} />
+          </button>
+          
+          <label className="btn btn-secondary btn-icon" style={{ width: 64, height: 64, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Subir imagen">
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleFileUpload} 
+              style={{ display: 'none' }}
+              disabled={isScanning}
+            />
+            <Upload size={32} />
+          </label>
+        </div>
+        <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>Apunta a una fórmula o sube una imagen</p>
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />

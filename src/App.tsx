@@ -5,6 +5,7 @@ import { TreeCanvas } from './components/TreeCanvas';
 import { parseExpression } from './logic/Parser';
 import type { TreeNode } from './logic/Parser';
 import { Camera, Download, X } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import './index.css';
 
 type AppState = 'scan' | 'edit' | 'canvas';
@@ -22,8 +23,8 @@ function App() {
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    // Show the download banner on mobile devices
-    if (isMobileDevice()) {
+    // Show the download banner on mobile devices, but ONLY if we are NOT already in the native app
+    if (isMobileDevice() && !Capacitor.isNativePlatform()) {
       setShowBanner(true);
     }
   }, []);
@@ -77,9 +78,11 @@ function App() {
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>MathTree OCR</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.85rem', textDecoration: 'none', backgroundColor: 'var(--success)' }}>
-            <Download size={14} /> APK
-          </a>
+          {!Capacitor.isNativePlatform() && (
+            <a href={APK_URL} download="MathTree-OCR.apk" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.85rem', textDecoration: 'none', backgroundColor: 'var(--success)' }}>
+              <Download size={14} /> APK
+            </a>
+          )}
           {appState === 'canvas' && (
             <button className="btn btn-secondary" onClick={() => setAppState('scan')} style={{ padding: '8px 16px' }}>
               <Camera size={16} /> Nuevo
