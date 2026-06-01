@@ -199,16 +199,18 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
   // Playback logic
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-    if (isPlaying && currentStep < steps.length - 1) {
+    // Allow currentStep to reach steps.length (the final snapshot state)
+    if (isPlaying && currentStep < steps.length) {
       timer = setTimeout(() => {
         setCurrentStep(prev => prev + 1);
       }, 1500); // Slightly slower for visibility
-    } else if (isPlaying && currentStep >= steps.length - 1) {
+    } else if (isPlaying && currentStep >= steps.length) {
       setIsPlaying(false);
     }
     return () => clearTimeout(timer);
   }, [isPlaying, currentStep, steps.length]);
 
+  // Pan handlers
   const [initialPinchDist, setInitialPinchDist] = useState<number | null>(null);
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
@@ -265,14 +267,10 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
       return `✅ Resultado final: ${finalResult}`;
     }
     const step = steps[currentStep];
-    const isLast = currentStep === steps.length - 1;
-    if (isLast) {
-      return `✅ Resultado final: ${formatNum(step.resultValue)}`;
-    }
     return `${formatNum(step.leftValue)} ${step.operator} ${formatNum(step.rightValue)} = ${formatNum(step.resultValue)}`;
   };
 
-  const isFinished = currentStep >= steps.length - 1 && currentStep !== -1;
+  const isFinished = currentStep >= steps.length && currentStep !== -1;
 
   return (
     <div style={styles.container} ref={containerRef}>
@@ -373,14 +371,14 @@ const styles: Record<string, React.CSSProperties> = {
   controlsPanel: {
     position: 'absolute',
     bottom: '20px',
-    left: '50%',
-    transform: 'translateX(-50%)',
+    left: '16px',
+    right: '16px',
+    margin: '0 auto',
     padding: '15px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
-    width: '94%',
     maxWidth: '420px',
     maxHeight: '30vh',
     overflowY: 'auto'

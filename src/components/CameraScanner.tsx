@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Camera, RefreshCw, Upload } from 'lucide-react';
 import Tesseract from 'tesseract.js';
+import { Capacitor } from '@capacitor/core';
+import { CapacitorPluginMlKitTextRecognition } from '@pantrist/capacitor-plugin-ml-kit-text-recognition';
 
 interface CameraScannerProps {
   onScan: (text: string) => void;
@@ -57,22 +59,40 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     try {
-      // Preprocessing could go here (grayscale, contrast)
-      const dataUrl = canvas.toDataURL('image/png');
-      // Use createWorker to restrict characters and improve OCR accuracy for math formulas
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger: m => console.log(m)
-      });
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
-      });
-      const result = await worker.recognize(dataUrl);
-      await worker.terminate();
-      
-      const text = result.data.text.trim();
-      onScan(text);
-    } catch (err) {
-      console.error("OCR Error:", err);
+      const enhancedDataUrl = canvas.toDataURL('image/png');
+
+      if (Capacitor.isNativePlatform()) {
+        // Remove data:image/png;base64, prefix for the plugin
+        const base64Data = enhancedDataUrl.split(',')[1];
+        try {
+          const result = await CapacitorPluginMlKitTextRecognition.detectText({
+            base64Image: base64Data,
+            rotation: 0
+          });
+          const text = result.text.trim();
+          onScan(text);
+        } catch (err) {
+          console.error("ML Kit Error:", err);
+          alert("Error con el lector ML Kit.");
+        }
+      } else {
+        // Web fallback using Tesseract
+        try {
+          const worker = await Tesseract.createWorker('eng', 1, {
+            logger: m => console.log(m)
+          });
+          await worker.setParameters({
+            tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
+          });
+          const result = await worker.recognize(enhancedDataUrl);
+          await worker.terminate();
+          
+          const text = result.data.text.trim();
+          onScan(text);
+        } catch (err) {
+          console.error("OCR Error:", err);
+        }
+      }
     } finally {
       setIsScanning(false);
     }
@@ -112,22 +132,39 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
         
         const enhancedDataUrl = canvas.toDataURL('image/png');
 
-        try {
-          const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => console.log(m)
-          });
-          await worker.setParameters({
-            tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
-          });
-          const result = await worker.recognize(enhancedDataUrl);
-          await worker.terminate();
-          
-          const text = result.data.text.trim();
-          onScan(text);
-        } catch (err) {
-          console.error("OCR Error:", err);
-        } finally {
-          setIsScanning(false);
+        if (Capacitor.isNativePlatform()) {
+          const base64Data = enhancedDataUrl.split(',')[1];
+          try {
+            const result = await CapacitorPluginMlKitTextRecognition.detectText({
+              base64Image: base64Data,
+              rotation: 0
+            });
+            const text = result.text.trim();
+            onScan(text);
+          } catch (err) {
+            console.error("ML Kit Error:", err);
+            alert("Error con el lector ML Kit.");
+          } finally {
+            setIsScanning(false);
+          }
+        } else {
+          try {
+            const worker = await Tesseract.createWorker('eng', 1, {
+              logger: m => console.log(m)
+            });
+            await worker.setParameters({
+              tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
+            });
+            const result = await worker.recognize(enhancedDataUrl);
+            await worker.terminate();
+            
+            const text = result.data.text.trim();
+            onScan(text);
+          } catch (err) {
+            console.error("OCR Error:", err);
+          } finally {
+            setIsScanning(false);
+          }
         }
       };
       img.src = dataUrl;
