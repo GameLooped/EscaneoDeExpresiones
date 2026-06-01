@@ -34,22 +34,25 @@ function replaceNode(tree: TreeNode, targetId: string, replacement: TreeNode): T
 export class Evaluator {
   private steps: EvalStep[] = [];
   private snapshotTrees: TreeNode[] = [];
+  private currentTree: TreeNode | null = null;
 
   public evaluate(root: TreeNode | null): { result: number; steps: EvalStep[]; snapshots: TreeNode[] } {
     this.steps = [];
     this.snapshotTrees = [];
+    this.currentTree = null;
+    
     if (!root) return { result: 0, steps: [], snapshots: [] };
 
     // Save the original tree as the first snapshot
-    let workingTree = cloneTree(root);
-    this.snapshotTrees.push(cloneTree(workingTree));
+    this.currentTree = cloneTree(root);
+    this.snapshotTrees.push(cloneTree(this.currentTree));
 
-    const finalResult = this.evaluateNode(root, workingTree);
+    const finalResult = this.evaluateNode(root);
 
     return { result: finalResult, steps: this.steps, snapshots: this.snapshotTrees };
   }
 
-  private evaluateNode(node: TreeNode, workingTree: TreeNode): number {
+  private evaluateNode(node: TreeNode): number {
     if (node.type === 'number') {
       return parseFloat(node.value);
     }
@@ -58,8 +61,10 @@ export class Evaluator {
       return 0;
     }
 
-    const leftVal = this.evaluateNode(node.left, workingTree);
-    const rightVal = this.evaluateNode(node.right, workingTree);
+    // Evaluate left completely first, which will update this.currentTree
+    const leftVal = this.evaluateNode(node.left);
+    // Then evaluate right
+    const rightVal = this.evaluateNode(node.right);
 
     let result = 0;
     switch (node.value) {
@@ -97,9 +102,11 @@ export class Evaluator {
     };
 
     // Replace the operator node in the working tree with the simplified result
-    workingTree = replaceNode(workingTree, node.id, simplifiedNode);
-    // Save a snapshot of the tree AFTER this simplification
-    this.snapshotTrees.push(cloneTree(workingTree));
+    if (this.currentTree) {
+      this.currentTree = replaceNode(this.currentTree, node.id, simplifiedNode);
+      // Save a snapshot of the tree AFTER this simplification
+      this.snapshotTrees.push(cloneTree(this.currentTree));
+    }
 
     return result;
   }

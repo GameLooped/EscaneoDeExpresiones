@@ -12,9 +12,20 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({ initialText,
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    // Basic cleanup of common OCR errors immediately
-    let cleaned = initialText.replace(/\s+/g, '');
-    cleaned = cleaned.replace(/x/gi, '*');
+    // Advanced cleanup of common OCR errors immediately
+    let cleaned = initialText.replace(/\s+/g, ''); // Remove spaces
+    cleaned = cleaned.replace(/[xX]/g, '*'); // x is usually multiply
+    cleaned = cleaned.replace(/[oO]/g, '0'); // O is usually 0
+    cleaned = cleaned.replace(/[lI|]/g, '1'); // l or I or | is usually 1
+    cleaned = cleaned.replace(/[zZ]/g, '2'); // Z is usually 2
+    cleaned = cleaned.replace(/[sS]/g, '5'); // S is usually 5
+    cleaned = cleaned.replace(/[bB]/g, '8'); // B is usually 8
+    cleaned = cleaned.replace(/[qQ]/g, '9'); // Q is usually 9
+    cleaned = cleaned.replace(/[tT]/g, '+'); // T is usually +
+    
+    // Remove any character that is NOT a digit, math operator, or parenthesis
+    cleaned = cleaned.replace(/[^0-9+\-*/()=.]/g, '');
+    
     setText(cleaned);
   }, [initialText]);
 

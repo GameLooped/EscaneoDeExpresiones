@@ -52,7 +52,8 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Draw current frame
+    // Apply heavy contrast and grayscale for better OCR
+    ctx.filter = 'grayscale(100%) contrast(300%)';
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     try {
@@ -87,23 +88,49 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({ onScan }) => {
       const dataUrl = event.target?.result as string;
       if (!dataUrl) return;
 
-      try {
-        const worker = await Tesseract.createWorker('eng', 1, {
-          logger: m => console.log(m)
-        });
-        await worker.setParameters({
-          tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
-        });
-        const result = await worker.recognize(dataUrl);
-        await worker.terminate();
+      const img = new Image();
+      img.onload = async () => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        // Scale down if image is too large to prevent out-of-memory errors
+        const maxDim = 1200;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim / w, maxDim / h);
+          w *= ratio;
+          h *= ratio;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         
-        const text = result.data.text.trim();
-        onScan(text);
-      } catch (err) {
-        console.error("OCR Error:", err);
-      } finally {
-        setIsScanning(false);
-      }
+        // Apply heavy contrast and grayscale for better OCR
+        ctx.filter = 'grayscale(100%) contrast(300%)';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        const enhancedDataUrl = canvas.toDataURL('image/png');
+
+        try {
+          const worker = await Tesseract.createWorker('eng', 1, {
+            logger: m => console.log(m)
+          });
+          await worker.setParameters({
+            tessedit_char_whitelist: '0123456789+-*/()xX÷= ',
+          });
+          const result = await worker.recognize(enhancedDataUrl);
+          await worker.terminate();
+          
+          const text = result.data.text.trim();
+          onScan(text);
+        } catch (err) {
+          console.error("OCR Error:", err);
+        } finally {
+          setIsScanning(false);
+        }
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };

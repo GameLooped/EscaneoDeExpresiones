@@ -209,22 +209,47 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
     return () => clearTimeout(timer);
   }, [isPlaying, currentStep, steps.length]);
 
-  // Pan handlers
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+  const [initialPinchDist, setInitialPinchDist] = useState<number | null>(null);
+
+  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e && e.touches.length === 2) {
+      // 2 fingers
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      setInitialPinchDist(Math.sqrt(dx * dx + dy * dy));
+      return;
+    }
+    
     setIsDragging(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setDragStart({ x: clientX - offset.x, y: clientY - offset.y });
   };
 
-  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (initialPinchDist) {
+        const delta = dist - initialPinchDist;
+        setScale(prev => Math.min(Math.max(0.3, prev + delta * 0.005), 3));
+      }
+      setInitialPinchDist(dist);
+      return;
+    }
+
     if (!isDragging) return;
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setOffset({ x: clientX - dragStart.x, y: clientY - dragStart.y });
   };
 
-  const handleMouseUp = () => setIsDragging(false);
+  const handlePointerUp = () => {
+    setIsDragging(false);
+    setInitialPinchDist(null);
+  };
 
   const handleWheel = (e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -254,13 +279,13 @@ export const TreeCanvas: React.FC<TreeCanvasProps> = ({ rootNode }) => {
       <canvas
         ref={canvasRef}
         style={styles.canvas}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handlePointerUp}
+        onTouchStart={handlePointerDown}
+        onTouchMove={handlePointerMove}
+        onTouchEnd={handlePointerUp}
         onWheel={handleWheel}
       />
 
