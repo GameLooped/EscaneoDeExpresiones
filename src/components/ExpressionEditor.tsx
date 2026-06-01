@@ -14,16 +14,23 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({ initialText,
   useEffect(() => {
     // Advanced cleanup of common OCR errors immediately
     let cleaned = initialText.replace(/\s+/g, ''); // Remove spaces
-    cleaned = cleaned.replace(/[xX]/g, '*'); // x is usually multiply
-    cleaned = cleaned.replace(/[oO]/g, '0'); // O is usually 0
-    cleaned = cleaned.replace(/[lI|]/g, '1'); // l or I or | is usually 1
-    cleaned = cleaned.replace(/[zZ]/g, '2'); // Z is usually 2
-    cleaned = cleaned.replace(/[sS]/g, '5'); // S is usually 5
-    cleaned = cleaned.replace(/[bB]/g, '8'); // B is usually 8
-    cleaned = cleaned.replace(/[qQ]/g, '9'); // Q is usually 9
-    cleaned = cleaned.replace(/[tT]/g, '+'); // T is usually +
+    // Aggressively map typographical variants of basic operators (+, -, *, /)
+    cleaned = cleaned.replace(/[xX×•·]/g, '*'); // Cross, dot, or x to multiply
+    cleaned = cleaned.replace(/[÷:\\]/g, '/');  // Division signs or backslash to division
+    cleaned = cleaned.replace(/[—–_~]/g, '-');  // Em dash, en dash, underscore to minus
+    cleaned = cleaned.replace(/[tT]/g, '+');    // T is usually a +
     
-    // Remove any character that is NOT a digit, math operator, or parenthesis
+    // Normalize decimals and numbers
+    cleaned = cleaned.replace(/,/g, '.');
+    cleaned = cleaned.replace(/[oO]/g, '0');
+    cleaned = cleaned.replace(/[lI|]/g, '1');
+    cleaned = cleaned.replace(/[zZ]/g, '2');
+    cleaned = cleaned.replace(/[aA]/g, '4');
+    cleaned = cleaned.replace(/[sS]/g, '5');
+    cleaned = cleaned.replace(/[bB]/g, '8');
+    cleaned = cleaned.replace(/[gGqQ]/g, '9');
+    
+    // Strictly keep ONLY digits, basic operators, and parentheses
     cleaned = cleaned.replace(/[^0-9+\-*/()=.]/g, '');
     
     setText(cleaned);
